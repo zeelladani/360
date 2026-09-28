@@ -3,83 +3,97 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
 <title>360° Photo Space</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
   :root{
-    --bg:#000; --glass:rgba(255,255,255,.08); --glass-brd:rgba(255,255,255,.14);
+    --bg:#000; --glass:rgba(18,18,24,.62); --glass-brd:rgba(255,255,255,.14);
     --text:#f4f5f7; --muted:#a9aab4; --accent:#5b8dff;
-    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
   }
   *{ box-sizing:border-box; }
-  html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; touch-action:manipulation; }
-  body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--text); -webkit-tap-highlight-color:transparent; }
-  #stage{ position:fixed; inset:0; z-index:1; }
+  html,body{ height:100%; margin:0; background:var(--bg); overflow:hidden; overscroll-behavior:none; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:var(--text); -webkit-tap-highlight-color:transparent; -webkit-user-select:none; user-select:none; }
+  #stage{ position:fixed; inset:0; z-index:1; touch-action:none; }
   #stage.pointer{ cursor:pointer; }
-  canvas{ display:block; touch-action:none; }
+  #stage.grab{ cursor:grab; } #stage.grabbing{ cursor:grabbing; }
+  canvas{ display:block; width:100%; height:100%; touch-action:none; }
 
   #hint{
-    position:absolute; z-index:10; top:calc(16px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%);
+    position:fixed; z-index:10; top:calc(12px + env(safe-area-inset-top,0px)); left:50%; transform:translateX(-50%);
     background:var(--glass); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
-    border:1px solid var(--glass-brd); padding:9px 16px; border-radius:100px; font-size:13px; color:var(--muted);
-    pointer-events:none; transition:opacity .5s ease; white-space:nowrap; text-align:center; max-width:90vw;
+    border:1px solid var(--glass-brd); padding:8px 16px; border-radius:100px; font-size:13px; color:var(--muted);
+    pointer-events:none; transition:opacity .5s ease; text-align:center; max-width:92vw;
   }
 
-  #bar{
-    position:absolute; z-index:10; left:50%; bottom:calc(18px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%);
-    display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap; max-width:94vw;
-    background:var(--glass); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
-    border:1px solid var(--glass-brd); border-radius:100px; padding:8px; box-shadow:0 8px 30px rgba(0,0,0,.35);
+  /* ---------- Footer dock ---------- */
+  #footer{
+    position:fixed; z-index:10; left:0; right:0; bottom:0;
+    background:var(--glass); backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
+    border-top:1px solid var(--glass-brd);
+    padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));
+    display:flex; flex-direction:column; align-items:center; gap:6px;
   }
-  button, label.btn{
-    background:transparent; color:var(--text); border:none; border-radius:100px;
-    min-height:44px; padding:0 16px; font-size:13.5px; font-weight:500; cursor:pointer;
-    display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+  #caption{ font-size:13px; color:var(--text); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #controls{ display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; width:100%; max-width:760px; }
+  button{
+    background:transparent; color:var(--text); border:none; border-radius:14px; font:inherit;
+    min-height:48px; min-width:48px; padding:6px 14px; font-size:13px; font-weight:500; cursor:pointer;
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; white-space:nowrap;
     transition:background .2s ease, transform .15s ease;
   }
-  button:hover, label.btn:hover{ background:rgba(255,255,255,.1); }
-  button:active, label.btn:active{ transform:scale(.94); }
-  button.active{ background:var(--accent); }
-  button.active:hover{ background:var(--accent); }
-  input[type=file]{ display:none; }
+  button:hover{ background:rgba(255,255,255,.1); }
+  button:active{ transform:scale(.94); }
+  button.active, button.active:hover{ background:var(--accent); }
+  button:focus-visible, a:focus-visible, input:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  .icon{ font-size:19px; line-height:1; }
+  .label{ font-size:11.5px; line-height:1; }
+  #zoomRow{ display:flex; align-items:center; gap:10px; padding:0 8px; min-width:180px; }
+  #zoomRow .icon{ font-size:17px; }
+  input[type=range]{ flex:1; width:140px; height:32px; accent-color:var(--accent); touch-action:pan-x; }
 
-  #zoomRow{ display:flex; align-items:center; gap:8px; padding:0 8px 0 4px; }
-  input[type=range]{ width:100px; accent-color:var(--accent); }
-  .icon{ font-size:16px; line-height:1; }
-  .label{ }
+  #credits{ display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); }
+  #credits a{ color:var(--text); text-decoration:none; padding:6px 4px; border-bottom:1px solid transparent; }
+  #credits a:hover{ border-bottom-color:var(--accent); }
 
-  .viewer-only{ display:none; }
-  body.mode-viewer .viewer-only{ display:inline-flex; }
-  body.mode-viewer .gallery-only{ display:none; }
+  .viewer-only{ display:none !important; }
+  body.mode-viewer #controls .viewer-only{ display:inline-flex !important; }
+  body.mode-viewer #zoomRow.viewer-only{ display:flex !important; }
+  body.mode-viewer #caption.viewer-only{ display:block !important; }
 
-  /* Mobile: tighter bar, icons only for secondary actions */
-  @media (max-width: 560px){
-    #bar{ gap:2px; padding:6px; bottom:calc(12px + env(safe-area-inset-bottom,0px)); }
-    button, label.btn{ padding:0 12px; font-size:0; min-width:44px; justify-content:center; }
-    .icon{ font-size:18px; }
-    #backBtn .label{ font-size:13px; margin-left:2px; } /* keep "Back" readable */
-    #zoomRow{ padding:0 4px; }
-    input[type=range]{ width:72px; }
-    #hint{ font-size:12px; padding:7px 12px; top:calc(10px + env(safe-area-inset-top,0px)); }
-    #caption{ font-size:12px; padding:7px 12px; }
+  @media (max-width:640px){
+    #controls{ gap:2px; }
+    #controls button{ flex:1 1 0; min-width:0; padding:6px 4px; }
+    #zoomRow{ order:-1; flex:1 0 100%; padding:0 6px; }
+    #zoomRow input{ width:auto; }
+    #hint{ font-size:12px; padding:7px 12px; }
+    #credits{ font-size:11.5px; gap:10px; }
   }
+  @media (prefers-reduced-motion:reduce){ *{ transition:none !important; } }
 </style>
 </head>
 <body>
 <div id="stage"></div>
 <div id="hint">Loading your space…</div>
-<div id="caption" class="viewer-only" style="position:absolute;z-index:10;bottom:calc(90px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--glass-brd);padding:8px 16px;border-radius:100px;font-size:13px;color:var(--text);white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;"></div>
 
-<div id="bar">
-  <button id="backBtn" class="viewer-only"><span class="icon">←</span><span class="label">Back</span></button>
-  <button id="modeToggle" class="viewer-only"><span class="icon">🪐</span><span class="label">Tiny Planet</span></button>
-  <button id="autoRotate" class="viewer-only"><span class="icon">▶</span><span class="label">Rotate</span></button>
-  <div id="zoomRow" class="viewer-only">
-    <span class="icon">🔍</span>
-    <input id="zoomSlider" type="range" min="35" max="100" value="75">
+<footer id="footer">
+  <div id="caption" class="viewer-only"></div>
+  <div id="controls">
+    <button id="backBtn" class="viewer-only" aria-label="Back to gallery"><span class="icon">←</span><span class="label">Back</span></button>
+    <button id="modeToggle" class="viewer-only" aria-label="Toggle tiny planet"><span class="icon">🪐</span><span class="label">Tiny Planet</span></button>
+    <button id="autoRotate" class="viewer-only" aria-label="Toggle auto rotate"><span class="icon">▶</span><span class="label">Rotate</span></button>
+    <div id="zoomRow" class="viewer-only">
+      <span class="icon">🔍</span>
+      <input id="zoomSlider" type="range" min="35" max="100" value="75" aria-label="Zoom">
+    </div>
+    <button id="fullscreen" aria-label="Fullscreen"><span class="icon">⛶</span><span class="label">Fullscreen</span></button>
   </div>
-  <button id="fullscreen"><span class="icon">⛶</span><span class="label">Fullscreen</span></button>
-</div>
+  <div id="credits">
+    <span>Created by Zeel Ladani</span>
+    <a href="https://www.instagram.com/zeel_ladani129/?hl=en" target="_blank" rel="noopener noreferrer">Instagram</a>
+    <a href="https://www.zeelladani.in" target="_blank" rel="noopener noreferrer">zeelladani.in</a>
+  </div>
+</footer>
 
 <script>
 (function(){
@@ -102,11 +116,11 @@
   const body = document.body;
   const stage = document.getElementById('stage');
   const renderer = new THREE.WebGLRenderer({ antialias:true });
-  renderer.setPixelRatio(window.devicePixelRatio || 1);
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(stage.clientWidth || window.innerWidth, stage.clientHeight || window.innerHeight);
   stage.appendChild(renderer.domElement);
 
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 4000);
+  const camera = new THREE.PerspectiveCamera(75, (stage.clientWidth||window.innerWidth)/(stage.clientHeight||window.innerHeight), 0.1, 4000);
   let lon = 0, lat = 0, planetMode = false, autoRotating = false;
   let appState = 'gallery';
 
@@ -164,7 +178,7 @@
   // ---------- Tiny planet (stereographic) viewer ----------
   const scenePlanet = new THREE.Scene();
   const orthoCam = new THREE.OrthographicCamera(-1,1,1,-1,0,1);
-  const planetUniforms = { map:{value:null}, resolution:{value:new THREE.Vector2(window.innerWidth,window.innerHeight)}, lon:{value:0}, lat:{value:0}, fov:{value:75} };
+  const planetUniforms = { map:{value:null}, resolution:{value:new THREE.Vector2(1,1)}, lon:{value:0}, lat:{value:0}, fov:{value:75} };
   const planetMaterial = new THREE.ShaderMaterial({
     uniforms: planetUniforms,
     vertexShader:`varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position,1.0); }`,
@@ -173,7 +187,7 @@
       uniform sampler2D map; uniform vec2 resolution; uniform float lon, lat, fov;
       const float PI = 3.14159265359;
       vec2 equirectUv(vec3 dir){
-        float u = atan(dir.z, -dir.x) / (2.0*PI) + 0.5; // sign matches the inside-view sphere convention (not mirrored)
+        float u = fract(atan(dir.z, dir.x) / (2.0*PI)); // identical to the normal sphere view's UV layout (not mirrored)
         float v = asin(clamp(dir.y,-1.0,1.0)) / PI + 0.5;
         return vec2(u, v);
       }
@@ -187,9 +201,9 @@
         float phi = radians(90.0 - lat);
         float lam = radians(lon);
         vec3 forward = normalize(vec3(sin(phi)*cos(lam), cos(phi), sin(phi)*sin(lam)));
-        vec3 worldUp = abs(forward.y) > 0.999 ? vec3(0.0,0.0,1.0) : vec3(0.0,1.0,0.0);
-        vec3 right = normalize(cross(worldUp, forward));
-        vec3 up = cross(forward, right);
+        // Same handedness as the normal 360 view (was mirrored), and smooth at the poles
+        vec3 right = vec3(-sin(lam), 0.0, cos(lam));
+        vec3 up = cross(right, forward);
         vec3 dir = forward*cos(c) + (right*cos(theta) + up*sin(theta)) * sin(c);
         gl_FragColor = texture2D(map, equirectUv(normalize(dir)));
       }`
@@ -208,6 +222,8 @@
 
   // ---------- UI ----------
   const hint = document.getElementById('hint');
+  const footer = document.getElementById('footer');
+  const INITIAL_LON = 180; // faces the centre of the panorama (lon 0 looked at the image seam)
   function setHint(text, autoHide){
     hint.textContent = text; hint.style.opacity = '1'; clearTimeout(hint._t);
     if(autoHide) hint._t = setTimeout(() => hint.style.opacity = '0', 3200);
@@ -215,63 +231,71 @@
   function openViewer(photo){
     ensureTexture(photo, tex => {
       setViewerTexture(tex);
-      appState = 'viewer'; body.classList.add('mode-viewer');
-      lon = 0; lat = 0; planetMode = false; setFov(75);
+      appState = 'viewer'; body.classList.add('mode-viewer'); stage.classList.add('grab');
+      lon = INITIAL_LON; lat = 0; planetMode = false; setFov(75);
       const mt = document.getElementById('modeToggle');
       mt.querySelector('.label').textContent = 'Tiny Planet'; mt.querySelector('.icon').textContent='🪐'; mt.classList.remove('active');
       document.getElementById('caption').textContent = photo.caption || '';
-      setHint('Drag to look around · Scroll or pinch to zoom', true);
+      setHint('Drag to look around · Pinch or scroll to zoom', true);
+      resize();
     });
   }
-  function backToSpace(){ appState='gallery'; body.classList.remove('mode-viewer'); setHint('Tap a floating photo to explore it in 360°', true); }
+  function backToSpace(){ appState='gallery'; body.classList.remove('mode-viewer'); stage.classList.remove('grab','grabbing'); setHint('Tap a floating photo to explore it in 360°', true); resize(); }
   document.getElementById('backBtn').addEventListener('click', backToSpace);
   setHint('Tap a floating photo to explore it in 360°', true);
 
-  // ---------- Controls ----------
-  let isDown=false, downX=0, downY=0, startLon=0, startLat=0, moved=false;
+  // ---------- Controls (Pointer Events: one code path for mouse, touch and pen) ----------
   const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
-  function onDown(x,y){ isDown=true; downX=x; downY=y; startLon=lon; startLat=lat; moved=false; }
-  function onMove(x,y){
-    if(!isDown) return;
-    if(Math.hypot(x-downX,y-downY) > 6) moved = true;
-    lon = startLon + (downX-x) * (planetMode?0.2:0.15);
-    lat = Math.max(-90, Math.min(90, startLat + (y-downY) * (planetMode?0.2:0.15)));
-  }
+  const pointers = new Map();
+  let downX=0, downY=0, startLon=0, startLat=0, moved=false, pinchDist=0, isDown=false;
   function pickOrb(x,y){
-    mouse.x=(x/window.innerWidth)*2-1; mouse.y=-(y/window.innerHeight)*2+1;
+    const r = renderer.domElement.getBoundingClientRect();
+    mouse.x=((x-r.left)/r.width)*2-1; mouse.y=-((y-r.top)/r.height)*2+1;
     raycaster.setFromCamera(mouse, camera);
     const hits = raycaster.intersectObjects(orbs.map(o=>o.hit));
     return hits.length ? hits[0].object.userData.orbit.photo : null;
   }
-  function onUp(x,y){
-    isDown = false;
-    if(appState==='gallery' && !moved){ const p = pickOrb(x,y); if(p) openViewer(p); }
-  }
-  renderer.domElement.addEventListener('mousedown', e => onDown(e.clientX,e.clientY));
-  window.addEventListener('mousemove', e => {
-    onMove(e.clientX,e.clientY);
-    if(appState==='gallery' && !isDown) stage.classList.toggle('pointer', !!pickOrb(e.clientX,e.clientY));
+  const el = renderer.domElement;
+  el.addEventListener('pointerdown', e => {
+    el.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(pointers.size===1){ isDown=true; downX=e.clientX; downY=e.clientY; startLon=lon; startLat=lat; moved=false; stage.classList.add('grabbing'); }
+    else if(pointers.size===2){ const [a,b]=[...pointers.values()]; pinchDist=Math.hypot(a.x-b.x,a.y-b.y); moved=true; }
   });
-  window.addEventListener('mouseup', e => onUp(e.clientX,e.clientY));
-  renderer.domElement.addEventListener('touchstart', e => { const t=e.touches[0]; onDown(t.clientX,t.clientY); }, {passive:true});
-  renderer.domElement.addEventListener('touchmove', e => { const t=e.touches[0]; onMove(t.clientX,t.clientY); }, {passive:true});
-  renderer.domElement.addEventListener('touchend', e => { const t=e.changedTouches[0]; onUp(t.clientX,t.clientY); });
+  el.addEventListener('pointermove', e => {
+    if(!pointers.has(e.pointerId)){
+      if(appState==='gallery' && e.pointerType==='mouse') stage.classList.toggle('pointer', !!pickOrb(e.clientX,e.clientY));
+      return;
+    }
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(pointers.size>=2){
+      const [a,b]=[...pointers.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y);
+      if(appState==='viewer') setFov(camera.fov + (pinchDist-d)*0.15);
+      pinchDist=d; return;
+    }
+    if(Math.hypot(e.clientX-downX,e.clientY-downY) > 6) moved = true;
+    // Content follows the finger/cursor: drag right -> image moves right, drag down -> image moves down
+    const k = (planetMode?0.2:0.15) * (camera.fov/75 > 1 ? 1 : Math.max(camera.fov/75, .5));
+    lon = startLon + (downX-e.clientX) * k;
+    lat = Math.max(-90, Math.min(90, startLat + (e.clientY-downY) * k));
+  });
+  function endPointer(e){
+    if(!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    if(pointers.size===1){ const p=[...pointers.values()][0]; downX=p.x; downY=p.y; startLon=lon; startLat=lat; }
+    if(pointers.size===0){
+      isDown=false; stage.classList.remove('grabbing');
+      if(e.type==='pointerup' && appState==='gallery' && !moved){ const p = pickOrb(e.clientX,e.clientY); if(p) openViewer(p); }
+    }
+  }
+  el.addEventListener('pointerup', endPointer);
+  el.addEventListener('pointercancel', endPointer);
 
   function setFov(v){
     camera.fov = Math.max(35, Math.min(100, v)); camera.updateProjectionMatrix();
     planetUniforms.fov.value = camera.fov; document.getElementById('zoomSlider').value = Math.round(camera.fov);
   }
-  renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); setFov(camera.fov + e.deltaY*0.03); }, {passive:false});
-  let pinchDist=null;
-  renderer.domElement.addEventListener('touchstart', e => {
-    if(e.touches.length===2) pinchDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
-  }, {passive:true});
-  renderer.domElement.addEventListener('touchmove', e => {
-    if(e.touches.length===2 && pinchDist){
-      const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
-      setFov(camera.fov + (pinchDist-d)*0.15); pinchDist = d;
-    }
-  }, {passive:true});
+  el.addEventListener('wheel', e => { e.preventDefault(); if(appState==='viewer') setFov(camera.fov + e.deltaY*0.03); }, {passive:false});
   document.getElementById('zoomSlider').addEventListener('input', e => setFov(Number(e.target.value)));
 
   document.getElementById('autoRotate').addEventListener('click', e => {
@@ -280,20 +304,24 @@
     e.currentTarget.querySelector('.label').textContent = autoRotating ? 'Stop' : 'Rotate';
     e.currentTarget.classList.toggle('active', autoRotating);
   });
-  document.getElementById('fullscreen').addEventListener('click', () => {
-    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
-    else document.exitFullscreen?.();
+  const fsBtn = document.getElementById('fullscreen'), root = document.documentElement;
+  const reqFs = root.requestFullscreen || root.webkitRequestFullscreen;
+  if(!reqFs) fsBtn.style.display = 'none'; // e.g. iPhone Safari has no fullscreen API
+  fsBtn.addEventListener('click', () => {
+    if(!(document.fullscreenElement || document.webkitFullscreenElement)) reqFs.call(root);
+    else (document.exitFullscreen || document.webkitExitFullscreen).call(document);
   });
   const modeBtn = document.getElementById('modeToggle');
   modeBtn.addEventListener('click', () => {
     planetMode = !planetMode;
     modeBtn.querySelector('.icon').textContent = planetMode ? '↔' : '🪐';
-    modeBtn.querySelector('.label').textContent = planetMode ? 'Normal View' : 'Tiny Planet';
+    modeBtn.querySelector('.label').textContent = planetMode ? 'Normal' : 'Tiny Planet';
     modeBtn.classList.toggle('active', planetMode);
     if(planetMode && lat>-20 && lat<20){ lat=-80; setFov(100); }
-    setHint(planetMode ? 'Drag sideways to spin · Drag up/down to flip tiny planet ↔ rabbit hole'
-                        : 'Drag to look around · Scroll or pinch to zoom', true);
+    setHint(planetMode ? 'Drag to spin · Drag up/down to flip planet ↔ rabbit hole'
+                        : 'Drag to look around · Pinch or scroll to zoom', true);
   });
+
   const clock = new THREE.Clock();
   function animate(){
     requestAnimationFrame(animate);
@@ -320,13 +348,21 @@
       renderer.render(sceneNormal, camera);
     }
   }
-  animate();
 
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    planetUniforms.resolution.value.set(window.innerWidth, window.innerHeight);
-  });
+  // ---------- Resize (mobile toolbars, rotation, HiDPI) ----------
+  function resize(){
+    const w = stage.clientWidth || window.innerWidth, h = stage.clientHeight || window.innerHeight;
+    camera.aspect = w/h; camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+    renderer.domElement.style.width = '100%'; renderer.domElement.style.height = '100%';
+    // gl_FragCoord is in device pixels, so the shader needs the drawing-buffer size (this fixes the off-centre planet)
+    const v = new THREE.Vector2(); renderer.getDrawingBufferSize(v); planetUniforms.resolution.value.copy(v);
+  }
+  window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+  resize();
+  animate();
 })();
 </script>
 </body>
